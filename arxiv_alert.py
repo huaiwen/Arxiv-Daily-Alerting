@@ -2,13 +2,38 @@ import datetime
 import requests
 import json
 import arxiv
-import os
+import datetime
+import pytz
+
+subscribe_subject = ["AI", "CL", "CV", "IR", "LG", "MM", "SI"]
+subscribe_subject_code = ["cat:cs." + subject for subject in subscribe_subject]
+
+subscribe_authors = []
 
 base_url = "https://arxiv.paperswithcode.com/api/v0/papers/"
 
+time_now = datetime.datetime.now()
+period_start_time = datetime.datetime(time_now.year, time_now.month, time_now.day - 3, 0, tzinfo=pytz.timezone("UTC"))
+
+
+def get_the_paper_today(query, max_results=200):
+    search_engine = arxiv.Search(
+        query=query,
+        max_results=max_results,
+        sort_by=arxiv.SortCriterion.SubmittedDate,
+        sort_order=arxiv.SortOrder.Descending
+    )
+
+    today_papers = []
+    for item in search_engine.results():
+        published_date = item.published
+        if published_date < period_start_time:
+            break
+        today_papers.append(item)
+    return today_papers
+
 
 def get_authors(authors, first_author=False):
-    output = str()
     if not first_author:
         output = ", ".join(str(author) for author in authors)
     else:
@@ -25,7 +50,7 @@ def sort_papers(papers):
     return output
 
 
-def get_daily_papers(topic, query="slam", max_results=2):
+def get_daily_papers(query, max_results=2):
     """
     @param max_results:
     @param topic: str
@@ -38,17 +63,11 @@ def get_daily_papers(topic, query="slam", max_results=2):
     content_to_web = dict()
 
     # content
-    output = dict()
-
-    search_engine = arxiv.Search(
-        query=query,
-        max_results=max_results,
-        sort_by=arxiv.SortCriterion.SubmittedDate
-    )
+    today_papers = get_the_paper_today(query)
 
     cnt = 0
 
-    for result in search_engine.results():
+    for result in today_papers:
 
         paper_id = result.get_short_id()
         paper_title = result.title
@@ -79,20 +98,16 @@ def get_daily_papers(topic, query="slam", max_results=2):
             if "official" in r and r["official"]:
                 cnt += 1
                 repo_url = r["official"]["url"]
-                content[
-                    paper_key] = f"|**{update_time}**|**{paper_title}**|{paper_first_author} et.al.|[{paper_id}]({paper_url})|**[link]({repo_url})**|\n"
-                content_to_web[
-                    paper_key] = f"- {update_time}, **{paper_title}**, {paper_first_author} et.al., Paper: [{paper_url}]({paper_url}), Code: **[{repo_url}]({repo_url})**"
+                content[paper_key] = f"|**{update_time}**|**{paper_title}**|{paper_first_author} et.al.|[{paper_id}]({paper_url})|**[link]({repo_url})**|\n"
+                content_to_web[paper_key] = f"- {update_time}, **{paper_title}**, {paper_first_author} et.al., Paper: [{paper_url}]({paper_url}), Code: **[{repo_url}]({repo_url})**"
 
             else:
-                content[
-                    paper_key] = f"|**{update_time}**|**{paper_title}**|{paper_first_author} et.al.|[{paper_id}]({paper_url})|null|\n"
-                content_to_web[
-                    paper_key] = f"- {update_time}, **{paper_title}**, {paper_first_author} et.al., Paper: [{paper_url}]({paper_url})"
+                content[paper_key] = f"|**{update_time}**|**{paper_title}**|{paper_first_author} et.al.|[{paper_id}]({paper_url})|null|\n"
+                content_to_web[paper_key] = f"- {update_time}, **{paper_title}**, {paper_first_author} et.al., Paper: [{paper_url}]({paper_url})"
 
             # TODO: select useful comments
             comments = None
-            if comments != None:
+            if comments is not None:
                 content_to_web[paper_key] = content_to_web[paper_key] + f", {comments}\n"
             else:
                 content_to_web[paper_key] = content_to_web[paper_key] + f"\n"
@@ -100,8 +115,8 @@ def get_daily_papers(topic, query="slam", max_results=2):
         except Exception as e:
             print(f"exception: {e} with id: {paper_key}")
 
-    data = {topic: content}
-    data_web = {topic: content_to_web}
+    data = {query: content}
+    data_web = {query: content_to_web}
     return data, data_web
 
 
@@ -195,22 +210,19 @@ if __name__ == "__main__":
     data_collector = []
     data_collector_web = []
 
-    keywords = dict()
-    keywords["SLAM"] = "SLAM"
-    keywords["SFM"] = "SFM" + "OR" + "\"Structure from Motion\""
-    keywords["Visual Localization"] = "\"Camera Localization\"OR\"Visual Localization\"OR\"Camera Re-localisation\""
-    keywords["Keypoint Detection"] = "\"Keypoint Detection\"OR\"Feature Descriptor\""
-    keywords["Image Matching"] = "\"Image Matching\""
+    # keywords = dict()
+    # keywords["SLAM"] = "SLAM"
+    # keywords["SFM"] = "SFM" + "OR" + "\"Structure from Motion\""
+    # keywords["Visual Localization"] = "\"Camera Localization\"OR\"Visual Localization\"OR\"Camera Re-localisation\""
+    # keywords["Keypoint Detection"] = "\"Keypoint Detection\"OR\"Feature Descriptor\""
+    # keywords["Image Matching"] = "\"Image Matching\""
 
-    for topic, keyword in keywords.items():
+    # for topic, keyword in keywords.items():
+    for subject_code in subscribe_subject_code:
         # topic = keyword.replace("\"","")
-        print("Keyword: " + topic)
-
-        data, data_web = get_daily_papers(topic, query=keyword, max_results=10)
+        data, data_web = get_daily_papers(query=subject_code, max_results=10)
         data_collector.append(data)
         data_collector_web.append(data_web)
-
-        print("\n")
 
     # 1. update README.md file
     json_file = "cv-arxiv-daily.json"
