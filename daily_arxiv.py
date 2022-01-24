@@ -6,60 +6,63 @@ import os
 
 base_url = "https://arxiv.paperswithcode.com/api/v0/papers/"
 
-def get_authors(authors, first_author = False):
+
+def get_authors(authors, first_author=False):
     output = str()
-    if first_author == False:
+    if not first_author:
         output = ", ".join(str(author) for author in authors)
     else:
         output = authors[0]
     return output
+
+
 def sort_papers(papers):
     output = dict()
     keys = list(papers.keys())
     keys.sort(reverse=True)
     for key in keys:
         output[key] = papers[key]
-    return output    
+    return output
 
-def get_daily_papers(topic,query="slam", max_results=2):
+
+def get_daily_papers(topic, query="slam", max_results=2):
     """
+    @param max_results:
     @param topic: str
     @param query: str
     @return paper_with_code: dict
     """
 
     # output 
-    content = dict() 
+    content = dict()
     content_to_web = dict()
 
     # content
     output = dict()
-    
+
     search_engine = arxiv.Search(
-        query = query,
-        max_results = max_results,
-        sort_by = arxiv.SortCriterion.SubmittedDate
+        query=query,
+        max_results=max_results,
+        sort_by=arxiv.SortCriterion.SubmittedDate
     )
 
     cnt = 0
 
     for result in search_engine.results():
 
-        paper_id            = result.get_short_id()
-        paper_title         = result.title
-        paper_url           = result.entry_id
-        code_url            = base_url + paper_id
-        paper_abstract      = result.summary.replace("\n"," ")
-        paper_authors       = get_authors(result.authors)
-        paper_first_author  = get_authors(result.authors,first_author = True)
-        primary_category    = result.primary_category
-        publish_time        = result.published.date()
-        update_time         = result.updated.date()
-        comments            = result.comment
+        paper_id = result.get_short_id()
+        paper_title = result.title
+        paper_url = result.entry_id
+        code_url = base_url + paper_id
+        paper_abstract = result.summary.replace("\n", " ")
+        paper_authors = get_authors(result.authors)
+        paper_first_author = get_authors(result.authors, first_author=True)
+        primary_category = result.primary_category
+        publish_time = result.published.date()
+        update_time = result.updated.date()
+        comments = result.comment
 
-
-      
-        print("Time = ", update_time ,
+        print("Time = ", update_time,
               " title = ", paper_title,
               " author = ", paper_first_author)
 
@@ -68,7 +71,7 @@ def get_daily_papers(topic,query="slam", max_results=2):
         if ver_pos == -1:
             paper_key = paper_id
         else:
-            paper_key = paper_id[0:ver_pos]    
+            paper_key = paper_id[0:ver_pos]
 
         try:
             r = requests.get(code_url).json()
@@ -76,12 +79,16 @@ def get_daily_papers(topic,query="slam", max_results=2):
             if "official" in r and r["official"]:
                 cnt += 1
                 repo_url = r["official"]["url"]
-                content[paper_key] = f"|**{update_time}**|**{paper_title}**|{paper_first_author} et.al.|[{paper_id}]({paper_url})|**[link]({repo_url})**|\n"
-                content_to_web[paper_key] = f"- {update_time}, **{paper_title}**, {paper_first_author} et.al., Paper: [{paper_url}]({paper_url}), Code: **[{repo_url}]({repo_url})**"
+                content[
+                    paper_key] = f"|**{update_time}**|**{paper_title}**|{paper_first_author} et.al.|[{paper_id}]({paper_url})|**[link]({repo_url})**|\n"
+                content_to_web[
+                    paper_key] = f"- {update_time}, **{paper_title}**, {paper_first_author} et.al., Paper: [{paper_url}]({paper_url}), Code: **[{repo_url}]({repo_url})**"
 
             else:
-                content[paper_key] = f"|**{update_time}**|**{paper_title}**|{paper_first_author} et.al.|[{paper_id}]({paper_url})|null|\n"
-                content_to_web[paper_key] = f"- {update_time}, **{paper_title}**, {paper_first_author} et.al., Paper: [{paper_url}]({paper_url})"
+                content[
+                    paper_key] = f"|**{update_time}**|**{paper_title}**|{paper_first_author} et.al.|[{paper_id}]({paper_url})|null|\n"
+                content_to_web[
+                    paper_key] = f"- {update_time}, **{paper_title}**, {paper_first_author} et.al., Paper: [{paper_url}]({paper_url})"
 
             # TODO: select useful comments
             comments = None
@@ -93,20 +100,21 @@ def get_daily_papers(topic,query="slam", max_results=2):
         except Exception as e:
             print(f"exception: {e} with id: {paper_key}")
 
-    data = {topic:content}
-    data_web = {topic:content_to_web}
-    return data,data_web 
+    data = {topic: content}
+    data_web = {topic: content_to_web}
+    return data, data_web
 
-def update_json_file(filename,data_all):
-    with open(filename,"r") as f:
+
+def update_json_file(filename, data_all):
+    with open(filename, "r") as f:
         content = f.read()
         if not content:
             m = {}
         else:
             m = json.loads(content)
-            
-    json_data = m.copy() 
-    
+
+    json_data = m.copy()
+
     # update papers in each keywords         
     for data in data_all:
         for keyword in data.keys():
@@ -117,21 +125,24 @@ def update_json_file(filename,data_all):
             else:
                 json_data[keyword] = papers
 
-    with open(filename,"w") as f:
-        json.dump(json_data,f)
-    
-def json_to_md(filename,md_filename,to_web = False, use_title = True):
+    with open(filename, "w") as f:
+        json.dump(json_data, f)
+
+
+def json_to_md(filename, md_filename, to_web=False, use_title=True):
     """
+    @param use_title:
+    @param to_web:
     @param filename: str
     @param md_filename: str
     @return None
     """
-    
-    DateNow = datetime.date.today()
-    DateNow = str(DateNow)
-    DateNow = DateNow.replace('-','.')
-    
-    with open(filename,"r") as f:
+
+    date_now = datetime.date.today()
+    date_now = str(date_now)
+    date_now = date_now.replace('-', '.')
+
+    with open(filename, "r") as f:
         content = f.read()
         if not content:
             data = {}
@@ -139,20 +150,20 @@ def json_to_md(filename,md_filename,to_web = False, use_title = True):
             data = json.loads(content)
 
     # clean README.md if daily already exist else create it
-    with open(md_filename,"w+") as f:
+    with open(md_filename, "w+") as f:
         pass
 
     # write data into README.md
-    with open(md_filename,"a+") as f:
+    with open(md_filename, "a+") as f:
 
-        if (use_title == True) and (to_web == True):
+        if use_title and to_web:
             f.write("---\n" + "layout: default\n" + "---\n\n")
 
-        if use_title == True:
-            f.write("## Updated on " + DateNow + "\n\n")
+        if use_title:
+            f.write("## Updated on " + date_now + "\n\n")
         else:
-            f.write("> Updated on " + DateNow + "\n\n")
-        
+            f.write("> Updated on " + date_now + "\n\n")
+
         for keyword in data.keys():
             day_content = data[keyword]
             if not day_content:
@@ -160,8 +171,8 @@ def json_to_md(filename,md_filename,to_web = False, use_title = True):
             # the head of each part
             f.write(f"## {keyword}\n\n")
 
-            if use_title == True :
-                if to_web == False:
+            if use_title:
+                if not to_web:
                     f.write("|Publish Date|Title|Authors|PDF|Code|\n" + "|---|---|---|---|---|\n")
                 else:
                     f.write("| Publish Date | Title | Authors | PDF | Code |\n")
@@ -169,35 +180,33 @@ def json_to_md(filename,md_filename,to_web = False, use_title = True):
 
             # sort papers by date
             day_content = sort_papers(day_content)
-        
-            for _,v in day_content.items():
+
+            for _, v in day_content.items():
                 if v is not None:
                     f.write(v)
 
             f.write(f"\n")
 
-    print("finished")        
+    print("finished")
 
- 
 
 if __name__ == "__main__":
 
     data_collector = []
-    data_collector_web= []
-    
-    keywords = dict()
-    keywords["SLAM"]                = "SLAM"
-    keywords["SFM"]                 = "SFM"+"OR"+"\"Structure from Motion\""
-    keywords["Visual Localization"] = "\"Camera Localization\"OR\"Visual Localization\"OR\"Camera Re-localisation\""
-    keywords["Keypoint Detection"]  = "\"Keypoint Detection\"OR\"Feature Descriptor\""
-    keywords["Image Matching"]      = "\"Image Matching\""
+    data_collector_web = []
 
-    for topic,keyword in keywords.items():
- 
+    keywords = dict()
+    keywords["SLAM"] = "SLAM"
+    keywords["SFM"] = "SFM" + "OR" + "\"Structure from Motion\""
+    keywords["Visual Localization"] = "\"Camera Localization\"OR\"Visual Localization\"OR\"Camera Re-localisation\""
+    keywords["Keypoint Detection"] = "\"Keypoint Detection\"OR\"Feature Descriptor\""
+    keywords["Image Matching"] = "\"Image Matching\""
+
+    for topic, keyword in keywords.items():
         # topic = keyword.replace("\"","")
         print("Keyword: " + topic)
 
-        data,data_web = get_daily_papers(topic, query = keyword, max_results = 10)
+        data, data_web = get_daily_papers(topic, query=keyword, max_results=10)
         data_collector.append(data)
         data_collector_web.append(data_web)
 
@@ -205,24 +214,24 @@ if __name__ == "__main__":
 
     # 1. update README.md file
     json_file = "cv-arxiv-daily.json"
-    md_file   = "README.md"
+    md_file = "README.md"
     # update json data
-    update_json_file(json_file,data_collector)
+    update_json_file(json_file, data_collector)
     # json data to markdown
-    json_to_md(json_file,md_file)
+    json_to_md(json_file, md_file)
 
     # 2. update docs/index.md file
     json_file = "./docs/cv-arxiv-daily-web.json"
-    md_file   = "./docs/index.md"
+    md_file = "./docs/index.md"
     # update json data
-    update_json_file(json_file,data_collector)
+    update_json_file(json_file, data_collector)
     # json data to markdown
-    json_to_md(json_file, md_file, to_web = True)
+    json_to_md(json_file, md_file, to_web=True)
 
     # 3. Update docs/wechat.md file
     json_file = "./docs/cv-arxiv-daily-wechat.json"
-    md_file   = "./docs/wechat.md"
+    md_file = "./docs/wechat.md"
     # update json data
     update_json_file(json_file, data_collector_web)
     # json data to markdown
-    json_to_md(json_file, md_file, to_web=False, use_title= False)
+    json_to_md(json_file, md_file, to_web=False, use_title=False)
